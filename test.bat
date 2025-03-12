@@ -1,3 +1,3 @@
 pushd ..\build
-8086asm listing_0041_add_sub_cmp_jnz
+8086sim listing_0042_completionist_decode
 popd
