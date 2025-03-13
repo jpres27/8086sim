@@ -157,22 +157,22 @@ enum Mod
 
 enum Reg
 {
-    AL,
-    CL,
-    DL,
-    BL,
-    AH,
-    CH,
-    DH,
-    BH,
-    AX,
-    CX,
-    DX,
-    BX,
-    SP,
-    BP,
-    SI,
-    DI
+    AX = 0,
+    AL = 0,
+    AH = 1,
+    BX = 2,
+    BL = 2,
+    BH = 3,
+    CX = 4,
+    CL = 4,
+    CH = 5,
+    DX = 6,
+    DL = 6,
+    DH = 7,
+    SP = 8,
+    BP = 10,
+    SI = 12,
+    DI = 14
 };
 
 struct Instruction

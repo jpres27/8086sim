@@ -48,26 +48,98 @@ static void reg_check(Instruction *inst, u8 shift, u8 mask, u8 *buffer, int i)
     if(inst->w)
     {
         u8 reg = buffer[i] & mask;
-        if((reg ^ (al_ax_bits >> shift)) == 0) fprintf(stdout, ax);
-        if((reg ^ (cl_cx_bits >> shift)) == 0) fprintf(stdout, cx);
-        if((reg ^ (dl_dx_bits >> shift)) == 0) fprintf(stdout, dx);
-        if((reg ^ (bl_bx_bits >> shift)) == 0) fprintf(stdout, bx);
-        if((reg ^ (ah_sp_bits >> shift)) == 0) fprintf(stdout, sp);
-        if((reg ^ (ch_bp_bits >> shift)) == 0) fprintf(stdout, bp);
-        if((reg ^ (dh_si_bits >> shift)) == 0) fprintf(stdout, si);
-        if((reg ^ (bh_di_bits >> shift)) == 0) fprintf(stdout, di);
+        if((reg ^ (al_ax_bits >> shift)) == 0) 
+        {
+            inst->reg = AX;
+            fprintf(stdout, ax);
+        }    
+        else if((reg ^ (cl_cx_bits >> shift)) == 0) 
+        {
+            inst->reg = CX;
+            fprintf(stdout, cx);
+        }    
+        else if((reg ^ (dl_dx_bits >> shift)) == 0) 
+        {
+            inst->reg = DX;
+            fprintf(stdout, dx);
+        }    
+        else if((reg ^ (bl_bx_bits >> shift)) == 0) 
+        {
+            inst->reg = BX;
+            fprintf(stdout, bx);
+        }
+        else if((reg ^ (ah_sp_bits >> shift)) == 0) 
+        {
+            inst->reg = SP;
+            fprintf(stdout, sp);
+        }
+        else if((reg ^ (ch_bp_bits >> shift)) == 0)
+        {
+            inst->reg = BP;
+            fprintf(stdout, bp);
+        }
+        else if((reg ^ (dh_si_bits >> shift)) == 0) 
+        {
+            inst->reg = SI;
+            fprintf(stdout, si);
+        }
+        else if((reg ^ (bh_di_bits >> shift)) == 0) 
+        {
+            inst->reg = DI;
+            fprintf(stdout, di);
+        }
+        else
+        {
+            fprintf(stdout, " -- ERROR REG BITS NOT DECODABLE -- \n");
+        }
     }
     else 
     {
         u8 reg = buffer[i] & mask;
-        if((reg ^ (al_ax_bits >> shift)) == 0) fprintf(stdout, al);
-        if((reg ^ (cl_cx_bits >> shift)) == 0) fprintf(stdout, cl);
-        if((reg ^ (dl_dx_bits >> shift)) == 0) fprintf(stdout, dl);
-        if((reg ^ (bl_bx_bits >> shift)) == 0) fprintf(stdout, bl);
-        if((reg ^ (ah_sp_bits >> shift)) == 0) fprintf(stdout, ah);
-        if((reg ^ (ch_bp_bits >> shift)) == 0) fprintf(stdout, ch);
-        if((reg ^ (dh_si_bits >> shift)) == 0) fprintf(stdout, dh);
-        if((reg ^ (bh_di_bits >> shift)) == 0) fprintf(stdout, bh);
+        if((reg ^ (al_ax_bits >> shift)) == 0) 
+        {
+            inst->reg = AL;
+            fprintf(stdout, al);
+        }
+        else if((reg ^ (cl_cx_bits >> shift)) == 0) 
+        {
+            inst->reg = CL;
+            fprintf(stdout, cl);
+        }
+        else if((reg ^ (dl_dx_bits >> shift)) == 0) 
+        {
+            inst->reg = DL;
+            fprintf(stdout, dl);
+        }
+        else if((reg ^ (bl_bx_bits >> shift)) == 0) 
+        {
+            inst->reg = BL;
+            fprintf(stdout, bl);
+        }
+        else if((reg ^ (ah_sp_bits >> shift)) == 0) 
+        {
+            inst->reg = AH;
+            fprintf(stdout, ah);
+        }
+        else if((reg ^ (ch_bp_bits >> shift)) == 0) 
+        {
+            inst->reg = CH;
+            fprintf(stdout, ch);
+        }
+        else if((reg ^ (dh_si_bits >> shift)) == 0) 
+        {
+            inst->reg = DH;
+            fprintf(stdout, dh);
+        }
+        else if((reg ^ (bh_di_bits >> shift)) == 0) 
+        {
+            inst->reg = BH;
+            fprintf(stdout, bh);
+        }
+        else
+        {
+            fprintf(stdout, " -- ERROR REG BITS NOT DECODABLE -- \n");
+        }
     }
 }
 

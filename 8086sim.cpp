@@ -9,6 +9,7 @@
 #include "8086sim.h"
 #include "8086asm.h"
 #include "8086asm.cpp"
+#include "8086execute.cpp"
 
 size_t max_bytes  = 256;
 
@@ -36,7 +37,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
 
     for(int i = 0; i < byte_count; ++i)
     {
-        // fprintf(stdout, "\n-- Beginning of Loop Iteration i = %d --\n", i);
         Instruction inst = {};
         u8 op;
 
@@ -51,14 +51,13 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             fprintf(stdout, comma);
             if(!inst.w)
             {
-                u8 data = memory->buffer[i+1];
-                fprintf(stdout, "%u", data);
+                memory->regs[inst.reg] = memory->buffer[i+1];
+                fprintf(stdout, "%u", memory->regs[inst.reg]);
             }
             else if (inst.w)
             {
-                u16 data;
-                memcpy(&data, memory->buffer + i+1, sizeof(data));
-                fprintf(stdout, "%u", data);
+                memcpy((u16 *)&memory->regs[inst.reg], memory->buffer + i+1, sizeof(u16));
+                fprintf(stdout, "%u", memory->regs[inst.reg]);
                 ++i; // three byte instruction since w=1
             }
             ++i; // it was at least a two byte instruction
@@ -340,5 +339,24 @@ int main(int arg_count, char **args)
         char *filename = args[1];
         size_t bytes_read = load_memory_from_file(filename, &memory);
         decode_and_execute(bytes_read, &memory);
+    }
+
+    char* reg_names[] = 
+    {
+        "AX",
+        "BX",
+        "CX",
+        "DX",
+        "SP",
+        "BP",
+        "SI",
+        "DI"
+    };
+    fprintf(stdout, "\n\nMEMORY / REGISTER STATE AT END OF EXECUTION:\n");
+    int k = 0;
+    for(int i = 0; i < 16; i = i + 2)
+    {
+        fprintf(stdout, "%hS: 0x%04x\n", reg_names[k], memory.regs[i]);
+        ++k;
     }
 }
