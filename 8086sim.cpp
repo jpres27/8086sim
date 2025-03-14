@@ -43,6 +43,30 @@ static void mov_op(Instruction *inst, u8 *dest, u8 *source)
     }
 }
 
+static void add_op(Instruction *inst, u8 *operand_1, u8 *operand_2)
+{
+    if(inst->w) 
+    {
+        *((u16*)operand_1) = *((u16*)operand_1) + *((u16*)operand_2);
+    }
+    else 
+    {
+        *operand_1 = *operand_1 + *operand_2;
+    }
+}
+
+static void sub_op(Instruction *inst, u8 *operand_1, u8 *operand_2)
+{
+    if(inst->w) 
+    {
+        *((u16*)operand_1) = *((u16*)operand_1) - *((u16*)operand_2);
+    }
+    else 
+    {
+        *operand_1 = *operand_1 - *operand_2;
+    }
+}
+
 static void rm_disp(Instruction *inst, u8 *buffer, int i)
 {
     if(inst->mod == MEM_BYTE_DISP)
@@ -102,6 +126,14 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             fprintf(stdout, comma);
             reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
             if(inst->op == MOV) mov_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            else if(inst->op == ADD) 
+            {
+                add_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            }
+            else if(inst->op == SUB) 
+            {
+                sub_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            }
         }
         else
         {
@@ -109,6 +141,14 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             fprintf(stdout, comma);
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             if(inst->op == MOV) mov_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+            else if(inst->op == ADD) 
+            {
+                add_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+            }
+            else if(inst->op == SUB) 
+            {
+                sub_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+            }
         }
     }
 
@@ -183,26 +223,28 @@ static int rmr(Instruction *inst, Memory *memory, int index)
 }
 
 // TODO: Reducing branching is possible
-static int irm(Instruction *inst, u8 *buffer, int index)
+// NOTE: There is nothing in the reg bits in these instructions so
+// all registers are stored in the rm bits
+static int irm(Instruction *inst, Memory *memory, int index)
 {
     int i = index;
     if(inst->op == ADD || inst->op == SUB || inst->op == CMP)
     {
-        sign_ext_check(inst, buffer, i);
+        sign_ext_check(inst, memory->buffer, i);
     }
-    wide_check(inst, buffer, i, false);
-    mod_check(inst, buffer, i + 1);
+    wide_check(inst, memory->buffer, i, false);
+    mod_check(inst, memory->buffer, i + 1);
 
     if (inst->mod == REG_NO_DISP)
     {
-        reg_check(inst, 3, rm_mask, buffer, i+1, true);
+        reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
     }
 
     else if (inst->mod == MEM_NO_DISP)
     {
         if(!inst->w) fprintf(stdout, "byte ");
         else if(inst->w) fprintf(stdout, "word ");
-        rm_check(inst, buffer, i + 1);
+        rm_check(inst, memory->buffer, i + 1);
         fprintf(stdout, "]");
     }
 
@@ -210,8 +252,8 @@ static int irm(Instruction *inst, u8 *buffer, int index)
     {
         if(!inst->w) fprintf(stdout, "byte ");
         else if(inst->w) fprintf(stdout, "word ");
-        rm_check(inst, buffer, i + 1);
-        rm_disp(inst, buffer, i + 2);
+        rm_check(inst, memory->buffer, i + 1);
+        rm_disp(inst, memory->buffer, i + 2);
         i++; // one byte disp plus at least one byte of disp
         if (inst->mod == MEM_WORD_DISP) ++i; // two byte disp
     }
@@ -220,24 +262,56 @@ static int irm(Instruction *inst, u8 *buffer, int index)
 
     if (!inst->w)
     {
-        u8 data = buffer[i + 2];
+        u8 data = memory->buffer[i + 2];
         fprintf(stdout, "%u", data);
+
+        if(inst->op == ADD)
+        {
+            add_op(inst, &memory->regs[inst->rm], &data);
+        }
+        else if(inst->op == SUB)
+        {
+            sub_op(inst, &memory->regs[inst->rm], &data);
+        }
+
         ++i; // w is not set so one byte of data
     }
     else if (inst->w)
     {
         if(inst->s)
         {
-            s8 data = buffer[i + 2];
+            u8 data = memory->buffer[i + 2];
             s16 se_data = (s16)data;
             fprintf(stdout, "%d", se_data);
+
+            if(inst->op == ADD)
+            {
+                add_op(inst, &memory->regs[inst->rm], &data);
+                //TODO: Deal with sign extension 
+            }
+            else if(inst->op == SUB)
+            {
+                sub_op(inst, &memory->regs[inst->rm], &data);
+                // TODO: Deal with sign extension
+            }  
+
             ++i; // w is not set so one byte of data
         }
         else
         {
             u16 data;
-            memcpy(&data, buffer + (i + 2), sizeof(data));
+            memcpy(&data, memory->buffer + (i + 2), sizeof(data));
             fprintf(stdout, "%u", data);
+
+            if(inst->op == ADD)
+            {
+                add_op(inst, &memory->regs[inst->rm], (u8*)(&data));
+            }
+            else if(inst->op == SUB)
+            {
+                sub_op(inst, &memory->regs[inst->rm], (u8*)(&data));
+            }  
+
             i = i+2; // w is set so two byts of data
         }
     }
@@ -474,7 +548,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
                 fprintf(stdout, cmp);
                 inst.op = CMP;
             }
-            i = irm(&inst, memory->buffer, i);
+            i = irm(&inst, memory, i);
             continue;
         }
 
@@ -516,7 +590,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, mov);
             inst.op = MOV;
-            i = irm(&inst, memory->buffer, i);
+            i = irm(&inst, memory, i);
             continue;
         }
 
