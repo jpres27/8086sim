@@ -206,3 +206,52 @@ static void direct_address_check(Instruction *inst, u8 *buffer, int i)
     u8 rm = buffer[i] & last_three_mask;
     if((inst->mod == MEM_NO_DISP) && ((rm ^ ooz) == 0)) inst->directaddress = true;
 }
+
+static void flag_check(Instruction *inst, Memory *memory, u8 *result)
+{
+    if(inst->w)
+    {
+        u16 wide_result = *((u16*)(result));
+        if(((wide_result & 0x8000) ^ 0x8000) == 0) 
+        {
+            memory->flags[SF] = true;
+            fprintf(stdout, "; flag->S ");
+        }
+        else
+        {
+            memory->flags[SF] = false;
+        }
+
+        if(wide_result == 0)
+        {
+            memory->flags[ZF] = true;
+            fprintf(stdout, "; flag->Z ");
+        }
+        else
+        {
+            memory->flags[ZF] = false;
+        }
+    }
+    else
+    {
+        if(((*result & 0x80) ^ 0x80) == 0) 
+        {
+            memory->flags[SF] = true;
+            fprintf(stdout, "; flag->S ");
+        }
+        else 
+        {
+            memory->flags[SF] = false;
+        }
+
+        if(*result == 0)
+        {
+            memory->flags[ZF] = true;
+            fprintf(stdout, "; flag->Z ");
+        }
+        else
+        {
+            memory->flags[ZF] = false;
+        }
+    }
+}

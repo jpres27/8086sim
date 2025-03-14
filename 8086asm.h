@@ -182,6 +182,12 @@ enum Reg
     DS = 22
 };
 
+enum flags
+{
+    ZF = 0,
+    SF = 1
+};
+
 struct Instruction
 {
     Opcode op;

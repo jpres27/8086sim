@@ -43,7 +43,7 @@ static void mov_op(Instruction *inst, u8 *dest, u8 *source)
     }
 }
 
-static void add_op(Instruction *inst, u8 *operand_1, u8 *operand_2)
+static void add_op(Instruction *inst, Memory *memory, u8 *operand_1, u8 *operand_2)
 {
     if(inst->w) 
     {
@@ -53,9 +53,11 @@ static void add_op(Instruction *inst, u8 *operand_1, u8 *operand_2)
     {
         *operand_1 = *operand_1 + *operand_2;
     }
+
+    flag_check(inst, memory, operand_1);
 }
 
-static void sub_op(Instruction *inst, u8 *operand_1, u8 *operand_2)
+static void sub_op(Instruction *inst, Memory *memory, u8 *operand_1, u8 *operand_2)
 {
     if(inst->w) 
     {
@@ -65,6 +67,22 @@ static void sub_op(Instruction *inst, u8 *operand_1, u8 *operand_2)
     {
         *operand_1 = *operand_1 - *operand_2;
     }
+
+    flag_check(inst, memory, operand_1);
+}
+
+static void cmp_op(Instruction *inst, Memory *memory, u8 *operand_1, u8 *operand_2)
+{
+    if(inst->w) 
+    {
+        *((u16*)(&memory->cmp_buffer[0])) = *((u16*)operand_1) - *((u16*)operand_2);
+    }
+    else 
+    {
+        memory->cmp_buffer[0] = *operand_1 - *operand_2;
+    }
+
+    flag_check(inst, memory, &memory->cmp_buffer[0]);
 }
 
 static void rm_disp(Instruction *inst, u8 *buffer, int i)
@@ -125,14 +143,21 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             fprintf(stdout, comma);
             reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
-            if(inst->op == MOV) mov_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            if(inst->op == MOV) 
+            {
+                mov_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            }
             else if(inst->op == ADD) 
             {
-                add_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+                add_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
             }
             else if(inst->op == SUB) 
             {
-                sub_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+                sub_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            }
+            else if(inst->op == CMP)
+            {
+                cmp_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
             }
         }
         else
@@ -140,14 +165,21 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
             fprintf(stdout, comma);
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
-            if(inst->op == MOV) mov_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+            if(inst->op == MOV) 
+            {
+                mov_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+            }
             else if(inst->op == ADD) 
             {
-                add_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+                add_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
             }
             else if(inst->op == SUB) 
             {
-                sub_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+                sub_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+            }
+            else if(inst->op == CMP)
+            {
+                cmp_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
             }
         }
     }
@@ -267,11 +299,15 @@ static int irm(Instruction *inst, Memory *memory, int index)
 
         if(inst->op == ADD)
         {
-            add_op(inst, &memory->regs[inst->rm], &data);
+            add_op(inst, memory, &memory->regs[inst->rm], &data);
         }
         else if(inst->op == SUB)
         {
-            sub_op(inst, &memory->regs[inst->rm], &data);
+            sub_op(inst, memory, &memory->regs[inst->rm], &data);
+        }
+        else if(inst->op == CMP)
+        {
+            cmp_op(inst, memory, &memory->regs[inst->rm], &data);
         }
 
         ++i; // w is not set so one byte of data
@@ -286,14 +322,14 @@ static int irm(Instruction *inst, Memory *memory, int index)
 
             if(inst->op == ADD)
             {
-                add_op(inst, &memory->regs[inst->rm], &data);
+                add_op(inst, memory, &memory->regs[inst->rm], &data);
                 //TODO: Deal with sign extension 
             }
             else if(inst->op == SUB)
             {
-                sub_op(inst, &memory->regs[inst->rm], &data);
+                sub_op(inst, memory, &memory->regs[inst->rm], &data);
                 // TODO: Deal with sign extension
-            }  
+            }
 
             ++i; // w is not set so one byte of data
         }
@@ -305,12 +341,16 @@ static int irm(Instruction *inst, Memory *memory, int index)
 
             if(inst->op == ADD)
             {
-                add_op(inst, &memory->regs[inst->rm], (u8*)(&data));
+                add_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
             }
             else if(inst->op == SUB)
             {
-                sub_op(inst, &memory->regs[inst->rm], (u8*)(&data));
+                sub_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
             }  
+            else if(inst->op == CMP)
+            {
+                cmp_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
+            }
 
             i = i+2; // w is set so two byts of data
         }
