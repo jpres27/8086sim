@@ -41,51 +41,88 @@ static void mod_check(Instruction *inst, u8 *buffer, int i)
     if((mode ^ reg_no_disp_bits) == 0) inst->mod = REG_NO_DISP;
 }
 
+static void segreg_check(Instruction *inst, u8 *buffer, int i)
+{
+    u8 segreg = (buffer[i] >> 3) & 0x3;
+    if((segreg ^ 0x0) == 0) 
+    {
+        inst->reg = ES;
+        fprintf(stdout, "es");
+    }
+    else if((segreg ^ 0x1) == 0) 
+    {
+        inst->reg = CS;
+        fprintf(stdout, "cs");
+    }
+    else if((segreg ^ 0x2) == 0) 
+    {
+        inst->reg = SS;
+        fprintf(stdout, "ss");
+    }
+    else if((segreg ^ 0x3) == 0)
+    {
+        inst->reg = DS;
+        fprintf(stdout, "ds");
+    }
+    else
+    {
+        fprintf(stdout, "ERROR: CANNOT DECIDE SEG REG\n");
+    }
+}
+
 // Reg check is used to check r/m when mod is 11 REG NO DISP
 // To do so, supply a 3 as the shift arg and use the rm_mask as the mask arg
-static void reg_check(Instruction *inst, u8 shift, u8 mask, u8 *buffer, int i)
+static void reg_check(Instruction *inst, u8 shift, u8 mask, u8 *buffer, int i, b32 rm_field)
 {
     if(inst->w)
     {
         u8 reg = buffer[i] & mask;
         if((reg ^ (al_ax_bits >> shift)) == 0) 
         {
-            inst->reg = AX;
+            if(!rm_field) inst->reg = AX;
+            else inst->rm = AX;
             fprintf(stdout, ax);
         }    
         else if((reg ^ (cl_cx_bits >> shift)) == 0) 
         {
-            inst->reg = CX;
+            if(!rm_field) inst->reg = CX;
+            else inst->rm = CX;
             fprintf(stdout, cx);
         }    
         else if((reg ^ (dl_dx_bits >> shift)) == 0) 
         {
-            inst->reg = DX;
+            if(!rm_field) inst->reg = DX;
+            else inst->rm = DX;
             fprintf(stdout, dx);
         }    
         else if((reg ^ (bl_bx_bits >> shift)) == 0) 
         {
-            inst->reg = BX;
+            if(!rm_field) inst->reg = BX;
+            else inst->rm = BX;
             fprintf(stdout, bx);
         }
         else if((reg ^ (ah_sp_bits >> shift)) == 0) 
         {
-            inst->reg = SP;
+            if(!rm_field) inst->reg = SP;
+            else inst->rm = SP;
             fprintf(stdout, sp);
         }
         else if((reg ^ (ch_bp_bits >> shift)) == 0)
         {
-            inst->reg = BP;
+            if(!rm_field) inst->reg = BP;
+            else inst->rm = BP;
             fprintf(stdout, bp);
         }
         else if((reg ^ (dh_si_bits >> shift)) == 0) 
         {
-            inst->reg = SI;
+            if(!rm_field) inst->reg = SI;
+            else inst->rm = SI;
             fprintf(stdout, si);
         }
         else if((reg ^ (bh_di_bits >> shift)) == 0) 
         {
-            inst->reg = DI;
+            if(!rm_field) inst->reg = DI;
+            else inst->rm = DI;
             fprintf(stdout, di);
         }
         else
@@ -98,42 +135,50 @@ static void reg_check(Instruction *inst, u8 shift, u8 mask, u8 *buffer, int i)
         u8 reg = buffer[i] & mask;
         if((reg ^ (al_ax_bits >> shift)) == 0) 
         {
-            inst->reg = AL;
+            if(!rm_field) inst->reg = AL;
+            else inst->rm = AL;
             fprintf(stdout, al);
         }
         else if((reg ^ (cl_cx_bits >> shift)) == 0) 
         {
-            inst->reg = CL;
+            if(!rm_field) inst->reg = CL;
+            else inst->rm = CL;
             fprintf(stdout, cl);
         }
         else if((reg ^ (dl_dx_bits >> shift)) == 0) 
         {
-            inst->reg = DL;
+            if(!rm_field) inst->reg = DL;
+            else inst->rm = DL;
             fprintf(stdout, dl);
         }
         else if((reg ^ (bl_bx_bits >> shift)) == 0) 
         {
-            inst->reg = BL;
+            if(!rm_field) inst->reg = BL;
+            else inst->rm = BL;
             fprintf(stdout, bl);
         }
         else if((reg ^ (ah_sp_bits >> shift)) == 0) 
         {
-            inst->reg = AH;
+            if(!rm_field) inst->reg = AH;
+            else inst->rm = AH;
             fprintf(stdout, ah);
         }
         else if((reg ^ (ch_bp_bits >> shift)) == 0) 
         {
-            inst->reg = CH;
+            if(!rm_field) inst->reg = CH;
+            else inst->rm = CH;
             fprintf(stdout, ch);
         }
         else if((reg ^ (dh_si_bits >> shift)) == 0) 
         {
-            inst->reg = DH;
+            if(!rm_field) inst->reg = DH;
+            else inst->rm = DH;
             fprintf(stdout, dh);
         }
         else if((reg ^ (bh_di_bits >> shift)) == 0) 
         {
-            inst->reg = BH;
+            if(!rm_field) inst->reg = BH;
+            else inst->rm = BH;
             fprintf(stdout, bh);
         }
         else
@@ -161,232 +206,3 @@ static void direct_address_check(Instruction *inst, u8 *buffer, int i)
     u8 rm = buffer[i] & last_three_mask;
     if((inst->mod == MEM_NO_DISP) && ((rm ^ ooz) == 0)) inst->directaddress = true;
 }
-
-static void rm_disp(Instruction *inst, u8 *buffer, int i)
-{
-    if(inst->mod == MEM_BYTE_DISP)
-    {
-        s8 disp = (s8)buffer[i];
-        if(disp != 0)
-        {
-            if(disp < 0)
-            {
-                fprintf(stdout, " - %d]", (disp*-1));
-            }
-            else
-            {
-                fprintf(stdout, " + %d]", disp);
-            }
-        }
-        else
-        {
-            fprintf(stdout, "]");
-        }
-    }
-    else if (inst->mod == MEM_WORD_DISP)
-    {
-        s16 disp;
-        memcpy(&disp, buffer + i, sizeof(disp));
-        if(disp != 0)
-        {
-            if(disp < 0)
-            {
-                fprintf(stdout, " - %d]", (disp*-1));
-            }
-            else
-            {
-                fprintf(stdout, " + %d]", disp);
-            }
-        }
-        else
-        {
-            fprintf(stdout, "]");
-        }
-    }
-}
-
-static int rmr(Instruction *inst, u8 *buffer, int index)
-{
-    int i = index;
-    dest_check(inst, buffer, i);
-    wide_check(inst, buffer, i, false);
-    mod_check(inst, buffer, i+1);
-    direct_address_check(inst, buffer, i+1);
-
-    if (inst->mod == REG_NO_DISP)
-    {
-        if (inst->d)
-        {
-            reg_check(inst, 0, reg_mask, buffer, i+1);
-            fprintf(stdout, comma);
-            reg_check(inst, 3, rm_mask, buffer, i+1);
-        }
-        else
-        {
-            reg_check(inst, 3, rm_mask, buffer, i+1);
-            fprintf(stdout, comma);
-            reg_check(inst, 0, reg_mask, buffer, i+1);
-        }
-    }
-
-    else if (inst->mod == MEM_NO_DISP)
-    {
-        if (inst->directaddress)
-        {
-            reg_check(inst, 0, reg_mask, buffer, i+1);
-            fprintf(stdout, comma);
-
-            if (!inst->w)
-            {
-                u8 data = buffer[i+2];
-                fprintf(stdout, "[%u]", data);
-                ++i; // w is not set so a byte of data
-            }
-            else if (inst->w)
-            {
-                u16 data;
-                memcpy(&data, buffer + (i+2), sizeof(data));
-                fprintf(stdout, "[%u]", data);
-                i = i+2;; // w is set so a word of data
-            }
-        }
-        else if (inst->d)
-        {
-            reg_check(inst, 0, reg_mask, buffer, i+1);
-            fprintf(stdout, comma);
-            rm_check(inst, buffer, i + 1);
-            fprintf(stdout, "]");
-        }
-        else
-        {
-            rm_check(inst, buffer, i+1);
-            fprintf(stdout, "]");
-            fprintf(stdout, comma);
-            reg_check(inst, 0, reg_mask, buffer, i+1);
-        }
-    }
-
-    else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
-    {
-        if (inst->d)
-        {
-            reg_check(inst, 0, reg_mask, buffer, i+1);
-            fprintf(stdout, comma);
-            rm_check(inst, buffer, i+1);
-            rm_disp(inst, buffer, i+2);
-            ++i; // one byte disp
-            if (inst->mod == MEM_WORD_DISP)
-            {
-                ++i; // two byte disp
-            }
-        }
-        else
-        {
-            rm_check(inst, buffer, i+1);
-            rm_disp(inst, buffer, i+2);
-            fprintf(stdout, comma);
-            reg_check(inst, 0, reg_mask, buffer, i+1);
-            ++i; // one byte disp
-            if (inst->mod == MEM_WORD_DISP)
-            {
-                ++i; // two byte disp
-            }
-        }
-    }
-
-    fprintf(stdout, end_of_inst);
-    ++i; // two byte instruction
-    return(i);
-}
-
-// TODO: Reducing branching is possible
-static int irm(Instruction *inst, u8 *buffer, int index)
-{
-    int i = index;
-    if(inst->op == ADD || inst->op == SUB || inst->op == CMP)
-    {
-        sign_ext_check(inst, buffer, i);
-    }
-    wide_check(inst, buffer, i, false);
-    mod_check(inst, buffer, i + 1);
-
-    if (inst->mod == REG_NO_DISP)
-    {
-        reg_check(inst, 3, rm_mask, buffer, i+1);
-    }
-
-    else if (inst->mod == MEM_NO_DISP)
-    {
-        if(!inst->w) fprintf(stdout, "byte ");
-        else if(inst->w) fprintf(stdout, "word ");
-        rm_check(inst, buffer, i + 1);
-        fprintf(stdout, "]");
-    }
-
-    else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
-    {
-        if(!inst->w) fprintf(stdout, "byte ");
-        else if(inst->w) fprintf(stdout, "word ");
-        rm_check(inst, buffer, i + 1);
-        rm_disp(inst, buffer, i + 2);
-        i++; // one byte disp plus at least one byte of disp
-        if (inst->mod == MEM_WORD_DISP) ++i; // two byte disp
-    }
-
-    fprintf(stdout, comma);
-
-    if (!inst->w)
-    {
-        u8 data = buffer[i + 2];
-        fprintf(stdout, "%u", data);
-        ++i; // w is not set so one byte of data
-    }
-    else if (inst->w)
-    {
-        if(inst->s)
-        {
-            s8 data = buffer[i + 2];
-            s16 se_data = (s16)data;
-            fprintf(stdout, "%d", se_data);
-            ++i; // w is not set so one byte of data
-        }
-        else
-        {
-            u16 data;
-            memcpy(&data, buffer + (i + 2), sizeof(data));
-            fprintf(stdout, "%u", data);
-            i = i+2; // w is set so two byts of data
-        }
-    }
-
-    fprintf(stdout, end_of_inst);
-    ++i;
-    return(i);
-}
-
-static int ia(Instruction *inst, u8 *buffer, int index)
-{
-    int i = index;
-
-    wide_check(inst, buffer, i, false);
-
-    if(!inst->w)
-    {
-        fprintf(stdout, "al, ");
-        u8 data = buffer[i+1];
-        fprintf(stdout, "[%u]", data);
-    }
-    else if (inst->w)
-    {
-        fprintf(stdout, "ax, ");
-        u16 data;
-        memcpy(&data, buffer + (i+1), sizeof(data));
-        fprintf(stdout, "[%u]", data);
-        ++i; // three byte instruction since w=1
-    }
-
-    fprintf(stdout, end_of_inst);
-    ++i;
-    return(i);
-}
-

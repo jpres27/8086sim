@@ -31,6 +31,248 @@ static size_t load_memory_from_file(char *filename, Memory *memory)
     return result;
 }
 
+static void mov_op(Instruction *inst, u8 *dest, u8 *source)
+{
+    if(inst->w) 
+    {
+        *((u16*)dest) = *((u16*)source);
+    }
+    else 
+    {
+        *dest = *source;
+    }
+}
+
+static void rm_disp(Instruction *inst, u8 *buffer, int i)
+{
+    if(inst->mod == MEM_BYTE_DISP)
+    {
+        s8 disp = (s8)buffer[i];
+        if(disp != 0)
+        {
+            if(disp < 0)
+            {
+                fprintf(stdout, " - %d]", (disp*-1));
+            }
+            else
+            {
+                fprintf(stdout, " + %d]", disp);
+            }
+        }
+        else
+        {
+            fprintf(stdout, "]");
+        }
+    }
+    else if (inst->mod == MEM_WORD_DISP)
+    {
+        s16 disp;
+        memcpy(&disp, buffer + i, sizeof(disp));
+        if(disp != 0)
+        {
+            if(disp < 0)
+            {
+                fprintf(stdout, " - %d]", (disp*-1));
+            }
+            else
+            {
+                fprintf(stdout, " + %d]", disp);
+            }
+        }
+        else
+        {
+            fprintf(stdout, "]");
+        }
+    }
+}
+
+static int rmr(Instruction *inst, Memory *memory, int index)
+{
+    int i = index;
+    dest_check(inst, memory->buffer, i);
+    wide_check(inst, memory->buffer, i, false);
+    mod_check(inst, memory->buffer, i+1);
+    direct_address_check(inst, memory->buffer, i+1);
+
+    if (inst->mod == REG_NO_DISP)
+    {
+        if (inst->d)
+        {
+            reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+            fprintf(stdout, comma);
+            reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
+            if(inst->op == MOV) mov_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+        }
+        else
+        {
+            reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
+            fprintf(stdout, comma);
+            reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+            if(inst->op == MOV) mov_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+        }
+    }
+
+    else if (inst->mod == MEM_NO_DISP)
+    {
+        if (inst->directaddress)
+        {
+            reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+            fprintf(stdout, comma);
+
+            if (!inst->w)
+            {
+                u8 data = memory->buffer[i+2];
+                fprintf(stdout, "[%u]", data);
+                ++i; // w is not set so a byte of data
+            }
+            else if (inst->w)
+            {
+                u16 data;
+                memcpy(&data, memory->buffer + (i+2), sizeof(data));
+                fprintf(stdout, "[%u]", data);
+                i = i+2;; // w is set so a word of data
+            }
+        }
+        else if (inst->d)
+        {
+            reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+            fprintf(stdout, comma);
+            rm_check(inst, memory->buffer, i + 1);
+            fprintf(stdout, "]");
+        }
+        else
+        {
+            rm_check(inst, memory->buffer, i+1);
+            fprintf(stdout, "]");
+            fprintf(stdout, comma);
+            reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+        }
+    }
+
+    else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+    {
+        if (inst->d)
+        {
+            reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+            fprintf(stdout, comma);
+            rm_check(inst, memory->buffer, i+1);
+            rm_disp(inst, memory->buffer, i+2);
+            ++i; // one byte disp
+            if (inst->mod == MEM_WORD_DISP)
+            {
+                ++i; // two byte disp
+            }
+        }
+        else
+        {
+            rm_check(inst, memory->buffer, i+1);
+            rm_disp(inst, memory->buffer, i+2);
+            fprintf(stdout, comma);
+            reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+            ++i; // one byte disp
+            if (inst->mod == MEM_WORD_DISP)
+            {
+                ++i; // two byte disp
+            }
+        }
+    }
+
+    fprintf(stdout, end_of_inst);
+    ++i; // two byte instruction
+    return(i);
+}
+
+// TODO: Reducing branching is possible
+static int irm(Instruction *inst, u8 *buffer, int index)
+{
+    int i = index;
+    if(inst->op == ADD || inst->op == SUB || inst->op == CMP)
+    {
+        sign_ext_check(inst, buffer, i);
+    }
+    wide_check(inst, buffer, i, false);
+    mod_check(inst, buffer, i + 1);
+
+    if (inst->mod == REG_NO_DISP)
+    {
+        reg_check(inst, 3, rm_mask, buffer, i+1, true);
+    }
+
+    else if (inst->mod == MEM_NO_DISP)
+    {
+        if(!inst->w) fprintf(stdout, "byte ");
+        else if(inst->w) fprintf(stdout, "word ");
+        rm_check(inst, buffer, i + 1);
+        fprintf(stdout, "]");
+    }
+
+    else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+    {
+        if(!inst->w) fprintf(stdout, "byte ");
+        else if(inst->w) fprintf(stdout, "word ");
+        rm_check(inst, buffer, i + 1);
+        rm_disp(inst, buffer, i + 2);
+        i++; // one byte disp plus at least one byte of disp
+        if (inst->mod == MEM_WORD_DISP) ++i; // two byte disp
+    }
+
+    fprintf(stdout, comma);
+
+    if (!inst->w)
+    {
+        u8 data = buffer[i + 2];
+        fprintf(stdout, "%u", data);
+        ++i; // w is not set so one byte of data
+    }
+    else if (inst->w)
+    {
+        if(inst->s)
+        {
+            s8 data = buffer[i + 2];
+            s16 se_data = (s16)data;
+            fprintf(stdout, "%d", se_data);
+            ++i; // w is not set so one byte of data
+        }
+        else
+        {
+            u16 data;
+            memcpy(&data, buffer + (i + 2), sizeof(data));
+            fprintf(stdout, "%u", data);
+            i = i+2; // w is set so two byts of data
+        }
+    }
+
+    fprintf(stdout, end_of_inst);
+    ++i;
+    return(i);
+}
+
+static int ia(Instruction *inst, u8 *buffer, int index)
+{
+    int i = index;
+
+    wide_check(inst, buffer, i, false);
+
+    if(!inst->w)
+    {
+        fprintf(stdout, "al, ");
+        u8 data = buffer[i+1];
+        fprintf(stdout, "[%u]", data);
+    }
+    else if (inst->w)
+    {
+        fprintf(stdout, "ax, ");
+        u16 data;
+        memcpy(&data, buffer + (i+1), sizeof(data));
+        fprintf(stdout, "[%u]", data);
+        ++i; // three byte instruction since w=1
+    }
+
+    fprintf(stdout, end_of_inst);
+    ++i;
+    return(i);
+}
+
 static void decode_and_execute(size_t byte_count, Memory *memory)
 {
     fprintf(stdout, opening);
@@ -47,17 +289,16 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             fprintf(stdout, mov);
 
             wide_check(&inst, memory->buffer, i, true);
-            reg_check(&inst, 3, last_three_mask, memory->buffer, i);
+            reg_check(&inst, 3, last_three_mask, memory->buffer, i, false);
             fprintf(stdout, comma);
+            mov_op(&inst, &memory->regs[inst.reg], &memory->buffer[i+1]);
             if(!inst.w)
             {
-                memory->regs[inst.reg] = memory->buffer[i+1];
-                fprintf(stdout, "%u", memory->regs[inst.reg]);
+                fprintf(stdout, "0x%02x", memory->regs[inst.reg]);
             }
             else if (inst.w)
             {
-                memcpy((u16 *)&memory->regs[inst.reg], memory->buffer + i+1, sizeof(u16));
-                fprintf(stdout, "%u", memory->regs[inst.reg]);
+                fprintf(stdout, "0x%04x", *((u16*)&memory->regs[inst.reg]));
                 ++i; // three byte instruction since w=1
             }
             ++i; // it was at least a two byte instruction
@@ -195,7 +436,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, add);
             inst.op = ADD;
-            i = rmr(&inst, memory->buffer, i);
+            i = rmr(&inst, memory, i);
             continue;
         }
 
@@ -203,7 +444,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, sub);
             inst.op = SUB;
-            i = rmr(&inst, memory->buffer, i);
+            i = rmr(&inst, memory, i);
             continue;
         }
 
@@ -211,7 +452,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, cmp);
             inst.op = CMP;
-            i = rmr(&inst, memory->buffer, i);
+            i = rmr(&inst, memory, i);
             continue;
         }
 
@@ -241,7 +482,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, mov);
             inst.op = MOV;
-            i = rmr(&inst, memory->buffer, i);
+            i = rmr(&inst, memory, i);
             continue;
         }
 
@@ -327,6 +568,47 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             ++i;
             continue;
         }
+
+        op = memory->buffer[i];
+        if((op ^ mov_rms_bits) == 0)
+        {
+            fprintf(stdout, mov);
+            inst.op = MOV;
+            mod_check(&inst, memory->buffer, i+1);
+            // Since moves with segment registers only happen in 16 bits, we automatically
+            // set the wide bit so that the rm check later will work properly
+            inst.w = true;
+
+            if(inst.mod == REG_NO_DISP)
+            {
+                segreg_check(&inst, memory->buffer, i+1);
+                fprintf(stdout, comma);
+                reg_check(&inst, 3, rm_mask, memory->buffer, i+1, true);
+                mov_op(&inst, &memory->regs[inst.reg], &memory->regs[inst.rm]);
+            }
+            fprintf(stdout, end_of_inst);
+            ++i;
+            continue;
+        }
+
+        if((op ^ mov_srm_bits) == 0)
+        {
+            fprintf(stdout, mov);
+            inst.op = MOV;
+            mod_check(&inst, memory->buffer, i+1);
+            inst.w = true;
+
+            if(inst.mod == REG_NO_DISP)
+            {
+                reg_check(&inst, 3, rm_mask, memory->buffer, i+1, true);
+                fprintf(stdout, comma);
+                segreg_check(&inst, memory->buffer, i+1);
+                mov_op(&inst, &memory->regs[inst.rm], &memory->regs[inst.reg]);
+            }
+            fprintf(stdout, end_of_inst);
+            ++i;
+            continue;
+        }
     }
 }
 
@@ -350,13 +632,17 @@ int main(int arg_count, char **args)
         "SP",
         "BP",
         "SI",
-        "DI"
+        "DI",
+        "ES",
+        "CS",
+        "SS",
+        "DS"
     };
     fprintf(stdout, "\n\nMEMORY / REGISTER STATE AT END OF EXECUTION:\n");
     int k = 0;
-    for(int i = 0; i < 16; i = i + 2)
+    for(int i = 0; i < 24; i = i + 2)
     {
-        fprintf(stdout, "%hS: 0x%04x\n", reg_names[k], memory.regs[i]);
+        fprintf(stdout, "%hS: 0x%04x\n", reg_names[k], *((u16*)&memory.regs[i]));
         ++k;
     }
 }

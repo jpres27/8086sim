@@ -15,12 +15,15 @@ u8 w_bit = 0x1;
 u8 mod_mask = 0xc0;
 u8 reg_mask = 0x38;
 u8 rm_mask = 0x7;
+u8 sr_mask = 0x18;
 
 u8 mov_ir_bits = 0xb0;
 u8 mov_irm_bits = 0xc6;
 u8 mov_ma_bits = 0xa0;
 u8 mov_am_bits = 0xa2;
 u8 mov_rmr_bits = 0x88;
+u8 mov_rms_bits = 0x8e;
+u8 mov_srm_bits = 0x8c;
 
 u8 irm_bits = 0x80;
 u8 add_irm_bits = 0x0;
@@ -172,7 +175,11 @@ enum Reg
     SP = 8,
     BP = 10,
     SI = 12,
-    DI = 14
+    DI = 14,
+    ES = 16,
+    CS = 18,
+    SS = 20,
+    DS = 22
 };
 
 struct Instruction

@@ -16,6 +16,6 @@ typedef s32 b32;
 
 struct Memory 
 {
-    u8 regs[16];
+    u8 regs[24];
     u8 buffer[256];
 };
