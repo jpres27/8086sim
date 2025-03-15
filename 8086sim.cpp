@@ -138,6 +138,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
 
     if (inst->mod == REG_NO_DISP)
     {
+        memory->instruction_pointer = i+2;
         if (inst->d)
         {
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
@@ -193,12 +194,14 @@ static int rmr(Instruction *inst, Memory *memory, int index)
 
             if (!inst->w)
             {
+                memory->instruction_pointer = i+3;
                 u8 data = memory->buffer[i+2];
                 fprintf(stdout, "[%u]", data);
                 ++i; // w is not set so a byte of data
             }
             else if (inst->w)
             {
+                memory->instruction_pointer = i+4;
                 u16 data;
                 memcpy(&data, memory->buffer + (i+2), sizeof(data));
                 fprintf(stdout, "[%u]", data);
@@ -207,6 +210,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         }
         else if (inst->d)
         {
+            memory->instruction_pointer = i+2;
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             fprintf(stdout, comma);
             rm_check(inst, memory->buffer, i + 1);
@@ -214,6 +218,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         }
         else
         {
+            memory->instruction_pointer = i+2;
             rm_check(inst, memory->buffer, i+1);
             fprintf(stdout, "]");
             fprintf(stdout, comma);
@@ -223,6 +228,9 @@ static int rmr(Instruction *inst, Memory *memory, int index)
 
     else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
     {
+        if(inst->mod == MEM_BYTE_DISP) memory->instruction_pointer = i+3;
+        else if(inst->mod == MEM_WORD_DISP) memory->instruction_pointer = i+4;
+
         if (inst->d)
         {
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
@@ -230,6 +238,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             rm_check(inst, memory->buffer, i+1);
             rm_disp(inst, memory->buffer, i+2);
             ++i; // one byte disp
+
             if (inst->mod == MEM_WORD_DISP)
             {
                 ++i; // two byte disp
@@ -249,6 +258,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         }
     }
 
+    fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
     fprintf(stdout, end_of_inst);
     ++i; // two byte instruction
     return(i);
@@ -294,6 +304,7 @@ static int irm(Instruction *inst, Memory *memory, int index)
 
     if (!inst->w)
     {
+        memory->instruction_pointer = i+3;
         u8 data = memory->buffer[i + 2];
         fprintf(stdout, "%u", data);
 
@@ -316,6 +327,8 @@ static int irm(Instruction *inst, Memory *memory, int index)
     {
         if(inst->s)
         {
+            memory->instruction_pointer = i+3;
+
             u8 data = memory->buffer[i + 2];
             s16 se_data = (s16)data;
             fprintf(stdout, "%d", se_data);
@@ -335,6 +348,8 @@ static int irm(Instruction *inst, Memory *memory, int index)
         }
         else
         {
+            memory->instruction_pointer = i+4;
+
             u16 data;
             memcpy(&data, memory->buffer + (i + 2), sizeof(data));
             fprintf(stdout, "%u", data);
@@ -352,16 +367,17 @@ static int irm(Instruction *inst, Memory *memory, int index)
                 cmp_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
             }
 
-            i = i+2; // w is set so two byts of data
+            i = i+2; // w is set so two bytes of data
         }
     }
 
+    fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
     fprintf(stdout, end_of_inst);
     ++i;
     return(i);
 }
 
-static int ia(Instruction *inst, u8 *buffer, int index)
+static int ia(Instruction *inst, Memory *memory, u8 *buffer, int index)
 {
     int i = index;
 
@@ -369,12 +385,14 @@ static int ia(Instruction *inst, u8 *buffer, int index)
 
     if(!inst->w)
     {
+        memory->instruction_pointer = i+2;
         fprintf(stdout, "al, ");
         u8 data = buffer[i+1];
         fprintf(stdout, "[%u]", data);
     }
     else if (inst->w)
     {
+        memory->instruction_pointer = i+3;
         fprintf(stdout, "ax, ");
         u16 data;
         memcpy(&data, buffer + (i+1), sizeof(data));
@@ -382,6 +400,7 @@ static int ia(Instruction *inst, u8 *buffer, int index)
         ++i; // three byte instruction since w=1
     }
 
+    fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
     fprintf(stdout, end_of_inst);
     ++i;
     return(i);
@@ -408,14 +427,17 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             mov_op(&inst, &memory->regs[inst.reg], &memory->buffer[i+1]);
             if(!inst.w)
             {
+                memory->instruction_pointer = i+2;
                 fprintf(stdout, "0x%02x", memory->regs[inst.reg]);
             }
             else if (inst.w)
             {
+                memory->instruction_pointer = i+3;
                 fprintf(stdout, "0x%04x", *((u16*)&memory->regs[inst.reg]));
                 ++i; // three byte instruction since w=1
             }
             ++i; // it was at least a two byte instruction
+            fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             continue;
         }
@@ -606,7 +628,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, add);
             inst.op = ADD;
-            i = ia(&inst, memory->buffer, i);
+            i = ia(&inst, memory, memory->buffer, i);
             continue;
         }
 
@@ -614,7 +636,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, sub);
             inst.op = SUB;
-            i = ia(&inst, memory->buffer, i);
+            i = ia(&inst, memory, memory->buffer, i);
             continue;
         }
 
@@ -622,7 +644,7 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         {
             fprintf(stdout, cmp);
             inst.op = CMP;
-            i = ia(&inst, memory->buffer, i);
+            i = ia(&inst, memory, memory->buffer, i);
             continue;
         }
 
@@ -644,16 +666,20 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
 
             if(!inst.w)
             {
+                memory->instruction_pointer = i+2;
                 u8 data = memory->buffer[i+1];
                 fprintf(stdout, "[%u]", data);
             }
             else if (inst.w)
             {
+                memory->instruction_pointer = i+3;
                 u16 data;
                 memcpy(&data, memory->buffer + (i+1), sizeof(data));
                 fprintf(stdout, "[%u]", data);
                 ++i; // three byte instruction since w=1
             }
+
+            fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;
@@ -667,17 +693,21 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             wide_check(&inst, memory->buffer, i, false);
             if(!inst.w)
             {
+                memory->instruction_pointer = i+2;
                 u8 data = memory->buffer[i+1];
                 fprintf(stdout, "[%u]", data);
             }
             else if (inst.w)
             {
+                memory->instruction_pointer = i+3;
                 u16 data;
                 memcpy(&data, memory->buffer + (i+1), sizeof(data));
                 fprintf(stdout, "[%u]", data);
                 ++i; // three byte instruction since w=1
             }
             fprintf(stdout, ", ax");
+
+            fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;
@@ -695,11 +725,14 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
 
             if(inst.mod == REG_NO_DISP)
             {
+                memory->instruction_pointer = i+2;
                 segreg_check(&inst, memory->buffer, i+1);
                 fprintf(stdout, comma);
                 reg_check(&inst, 3, rm_mask, memory->buffer, i+1, true);
                 mov_op(&inst, &memory->regs[inst.reg], &memory->regs[inst.rm]);
             }
+
+            fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;
@@ -714,11 +747,14 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
 
             if(inst.mod == REG_NO_DISP)
             {
+                memory->instruction_pointer = i+2;
                 reg_check(&inst, 3, rm_mask, memory->buffer, i+1, true);
                 fprintf(stdout, comma);
                 segreg_check(&inst, memory->buffer, i+1);
                 mov_op(&inst, &memory->regs[inst.rm], &memory->regs[inst.reg]);
             }
+
+            fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;

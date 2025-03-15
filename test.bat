@@ -1,3 +1,3 @@
 pushd ..\build
-8086sim listing_0046_add_sub_cmp
+8086sim listing_0048_ip_register
 popd

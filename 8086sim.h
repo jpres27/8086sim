@@ -16,6 +16,7 @@ typedef s32 b32;
 
 struct Memory 
 {
+    s32 instruction_pointer;
     u8 regs[24];
     b32 flags[2];
     u8 buffer[256];
