@@ -87,15 +87,6 @@ u8 rm_ch_bp_bits = ch_bp_bits >> 3;
 u8 rm_dh_si_bits = dh_si_bits >> 3;
 u8 rm_bh_di_bits = bh_di_bits >> 3;
 
-u8 zzz = 0x0;
-u8 zzo = 0x1;
-u8 zoz = 0x2;
-u8 zoo = 0x3;
-u8 ozz = 0x4;
-u8 ozo = 0x5;
-u8 ooz = 0x6;
-u8 ooo = 0x7;
-
 char *opening = "bits 16\n\n";
 char *comma = ", ";
 
@@ -196,15 +187,6 @@ struct Instruction
     b32 w;
     Mod mod;
     Reg reg;
-    // TODO: We aren't using rm or storing any state about it
-    // so we should update an rm enum or something with all possible
-    // states of rm that we can set in conjunction with mod checking
-    // or something just to store all relevant information, so that
-    // the contents of an instruction could be known from this struct
-    // alone, without reference to the assembly we print. It may simply be
-    // that we directly store the state of the rm bits and then whatever 
-    // needs to interpret it can do so in light of mod and we dont need 
-    // to worry about that here.
-    Reg rm;
+    u32 rm;
     b32 directaddress;
 };

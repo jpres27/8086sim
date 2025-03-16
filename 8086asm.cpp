@@ -191,20 +191,88 @@ static void reg_check(Instruction *inst, u8 shift, u8 mask, u8 *buffer, int i, b
 static void rm_check(Instruction *inst, u8 *buffer, int i)
 {
     u8 rm = buffer[i] & last_three_mask;
-    if((rm ^ zzz) == 0) fprintf(stdout, "[bx + si"); 
-    if((rm ^ zzo) == 0) fprintf(stdout, "[bx + di"); 
-    if((rm ^ zoz) == 0) fprintf(stdout, "[bp + si"); 
-    if((rm ^ zoo) == 0) fprintf(stdout, "[bp + di"); 
-    if((rm ^ ozz) == 0) fprintf(stdout, "[si"); 
-    if((rm ^ ozo) == 0) fprintf(stdout, "[di");  
-    if((rm ^ ooz) == 0) fprintf(stdout, "[bp");
-    if((rm ^ ooo) == 0) fprintf(stdout, "[bx"); 
+    if((rm ^ 0x0) == 0) 
+    {
+        inst->rm = 0;
+    }
+    if((rm ^ 0x1) == 0) 
+    {
+        inst->rm = 1;
+    }
+    if((rm ^ 0x2) == 0) 
+    {
+        inst->rm = 2;
+    }
+    if((rm ^ 0x3) == 0) 
+    {
+        inst->rm = 3;
+    }
+    if((rm ^ 0x4) == 0) 
+    {
+        inst->rm = 4;
+    }
+    if((rm ^ 0x5) == 0) 
+    {
+        inst->rm = 5;
+    }
+    if((rm ^ 0x6) == 0) 
+    {
+        inst->rm = 6;
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->directaddress = true;
+        }
+    }
+    if((rm ^ 0x7) == 0) 
+    {
+        inst->rm = 7;
+    }
 }
 
-static void direct_address_check(Instruction *inst, u8 *buffer, int i)
+static void rm_print(Instruction *inst, u8 *buffer, int i)
 {
     u8 rm = buffer[i] & last_three_mask;
-    if((inst->mod == MEM_NO_DISP) && ((rm ^ ooz) == 0)) inst->directaddress = true;
+    if((rm ^ 0x0) == 0) 
+    {
+        fprintf(stdout, "bx + si"); 
+    }
+    if((rm ^ 0x1) == 0) 
+    {
+        fprintf(stdout, "bx + di"); 
+    }
+    if((rm ^ 0x2) == 0) 
+    {
+        fprintf(stdout, "bp + si"); 
+    }
+    if((rm ^ 0x3) == 0) 
+    {
+        fprintf(stdout, "bp + di"); 
+    }
+    if((rm ^ 0x4) == 0) 
+    {
+        fprintf(stdout, "si"); 
+    }
+    if((rm ^ 0x5) == 0) 
+    {
+        fprintf(stdout, "di");  
+    }
+    if((rm ^ 0x6) == 0) 
+    {
+        inst->rm = 6;
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            u16 disp = *((u16*)&buffer[i+1]);
+            fprintf(stdout, "%u", disp);
+        }
+        else
+        {
+            fprintf(stdout, "[bp");
+        }
+    }
+    if((rm ^ 0x7) == 0) 
+    {
+        fprintf(stdout, "[bx"); 
+    }
 }
 
 static void flag_check(Instruction *inst, Memory *memory, u8 *result)

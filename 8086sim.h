@@ -13,6 +13,7 @@ typedef long long s64;
 typedef s32 b32;
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+#define TwoByteAccess(a) *((u16*)&a)
 
 struct Memory 
 {
@@ -21,4 +22,5 @@ struct Memory
     b32 flags[2];
     u8 buffer[256];
     u8 cmp_buffer[2];
+    u8 mem[65536];
 };

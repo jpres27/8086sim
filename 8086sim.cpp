@@ -94,7 +94,7 @@ static void rm_disp(Instruction *inst, u8 *buffer, int i)
         {
             if(disp < 0)
             {
-                fprintf(stdout, " - %d]", (disp*-1));
+                fprintf(stdout, " - %d]", (-1*disp));
             }
             else
             {
@@ -108,8 +108,7 @@ static void rm_disp(Instruction *inst, u8 *buffer, int i)
     }
     else if (inst->mod == MEM_WORD_DISP)
     {
-        s16 disp;
-        memcpy(&disp, buffer + i, sizeof(disp));
+        s16 disp = *((s16*)buffer[i]);
         if(disp != 0)
         {
             if(disp < 0)
@@ -128,13 +127,72 @@ static void rm_disp(Instruction *inst, u8 *buffer, int i)
     }
 }
 
+static u16 rm_mem_calc(Instruction *inst, Memory *memory, int i)
+{
+    u16 address = 0;
+    u16 displacement = 0;
+
+    if(inst->mod == MEM_BYTE_DISP) displacement = (u16)memory->buffer[i+2];
+    if(inst->mod == MEM_WORD_DISP) displacement = TwoByteAccess(memory->buffer[i+2]);
+
+    switch(inst->rm)
+    {
+    case 0:
+        address = TwoByteAccess(memory->regs[BX]) + TwoByteAccess(memory->regs[SI]) + displacement;
+        break;
+
+    case 1:
+        address = TwoByteAccess(memory->regs[BX]) + TwoByteAccess(memory->regs[DI]) + displacement;
+        break;
+
+    case 2:
+        address = TwoByteAccess(memory->regs[BP]) + TwoByteAccess(memory->regs[SI]) + displacement;
+        break;
+
+    case 3:
+        address = TwoByteAccess(memory->regs[BP]) + TwoByteAccess(memory->regs[DI]) + displacement;
+        break;
+
+    case 4:
+        address = TwoByteAccess(memory->regs[SI]) + displacement;
+        break;
+
+    case 5:
+        address = TwoByteAccess(memory->regs[DI]) + displacement;
+        break;
+
+    case 6:
+        if(inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP) 
+        {
+            address = TwoByteAccess(memory->regs[BP]) + displacement;
+        }
+        else if(inst->mod == MEM_NO_DISP) 
+        {
+            address = TwoByteAccess(memory->buffer[i+2]);
+        }
+        break;
+
+    case 7:
+        address = TwoByteAccess(memory->regs[BX]) + displacement;
+        break;
+    default:
+        fprintf(stdout, "ERROR: Couldn't calculate effective address\n");
+    }
+
+    //fprintf(stdout, " | ADDRESS: %u |", address);
+    return(address);
+}
+
+// TODO: Once we stop needing to print instructions, a lot of this function can be
+// greatly simplified, as much of what is here is solely to print out the parts
+// of the instruction in the correct order
 static int rmr(Instruction *inst, Memory *memory, int index)
 {
     int i = index;
     dest_check(inst, memory->buffer, i);
     wide_check(inst, memory->buffer, i, false);
     mod_check(inst, memory->buffer, i+1);
-    direct_address_check(inst, memory->buffer, i+1);
+    rm_check(inst, memory->buffer, i+1);
 
     if (inst->mod == REG_NO_DISP)
     {
@@ -187,11 +245,14 @@ static int rmr(Instruction *inst, Memory *memory, int index)
 
     else if (inst->mod == MEM_NO_DISP)
     {
+        u16 address = rm_mem_calc(inst, memory, i);
         if (inst->directaddress)
         {
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             fprintf(stdout, comma);
 
+            // NOTE: If we refactor and remove printing, we just need to preserve the 
+            // index handling and register checking going on in this code below
             if (!inst->w)
             {
                 memory->instruction_pointer = i+3;
@@ -213,16 +274,23 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             memory->instruction_pointer = i+2;
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             fprintf(stdout, comma);
-            rm_check(inst, memory->buffer, i + 1);
+            rm_print(inst, memory->buffer, i + 1);
             fprintf(stdout, "]");
+
         }
         else
         {
             memory->instruction_pointer = i+2;
-            rm_check(inst, memory->buffer, i+1);
+            rm_print(inst, memory->buffer, i+1);
             fprintf(stdout, "]");
             fprintf(stdout, comma);
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
+        }
+
+        if(inst->op == MOV)
+        {
+            if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->mem[address]);
+            else mov_op(inst, &memory->mem[address], &memory->regs[inst->reg]);
         }
     }
 
@@ -230,12 +298,13 @@ static int rmr(Instruction *inst, Memory *memory, int index)
     {
         if(inst->mod == MEM_BYTE_DISP) memory->instruction_pointer = i+3;
         else if(inst->mod == MEM_WORD_DISP) memory->instruction_pointer = i+4;
+        u16 address = rm_mem_calc(inst, memory, i);
 
         if (inst->d)
         {
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             fprintf(stdout, comma);
-            rm_check(inst, memory->buffer, i+1);
+            rm_print(inst, memory->buffer, i+1);
             rm_disp(inst, memory->buffer, i+2);
             ++i; // one byte disp
 
@@ -246,7 +315,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         }
         else
         {
-            rm_check(inst, memory->buffer, i+1);
+            rm_print(inst, memory->buffer, i+1);
             rm_disp(inst, memory->buffer, i+2);
             fprintf(stdout, comma);
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
@@ -255,6 +324,12 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             {
                 ++i; // two byte disp
             }
+        }
+
+        if(inst->op == MOV)
+        {
+            if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->mem[address]);
+            else mov_op(inst, &memory->mem[address], &memory->regs[inst->reg]);
         }
     }
 
@@ -267,6 +342,9 @@ static int rmr(Instruction *inst, Memory *memory, int index)
 // TODO: Reducing branching is possible
 // NOTE: There is nothing in the reg bits in these instructions so
 // all registers are stored in the rm bits
+// TODO: This function probably needs to be almost totally rewriten
+// now that we are implementing memory ops. This structure just makes
+// no sense beyond printing properly.
 static int irm(Instruction *inst, Memory *memory, int index)
 {
     int i = index;
@@ -280,94 +358,218 @@ static int irm(Instruction *inst, Memory *memory, int index)
     if (inst->mod == REG_NO_DISP)
     {
         reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
+        fprintf(stdout, comma);
+
+        if (!inst->w)
+        {
+            memory->instruction_pointer = i+3;
+            u8 data = memory->buffer[i + 2];
+            fprintf(stdout, "%u", data);
+    
+            if(inst->op == MOV)
+            {
+                mov_op(inst, &memory->regs[inst->rm], &data);
+            }
+            else if(inst->op == ADD)
+            {
+                add_op(inst, memory, &memory->regs[inst->rm], &data);
+            }
+            else if(inst->op == SUB)
+            {
+                sub_op(inst, memory, &memory->regs[inst->rm], &data);
+            }
+            else if(inst->op == CMP)
+            {
+                cmp_op(inst, memory, &memory->regs[inst->rm], &data);
+            }
+    
+            ++i; // w is not set so one byte of data
+        }
+        else if (inst->w)
+        {
+            if(inst->s)
+            {
+                memory->instruction_pointer = i+3;
+    
+                u8 data = memory->buffer[i + 2];
+                s16 se_data = (s16)data;
+                fprintf(stdout, "%d", se_data);
+    
+                if(inst->op == ADD)
+                {
+                    add_op(inst, memory, &memory->regs[inst->rm], &data);
+                    //TODO: Deal with sign extension 
+                }
+                else if(inst->op == SUB)
+                {
+                    sub_op(inst, memory, &memory->regs[inst->rm], &data);
+                    // TODO: Deal with sign extension
+                }
+    
+                ++i; // w is not set so one byte of data
+            }
+            else
+            {
+                memory->instruction_pointer = i+4;
+    
+                u16 data;
+                memcpy(&data, memory->buffer + (i + 2), sizeof(data));
+                fprintf(stdout, "%u", data);
+    
+                if(inst->op == MOV)
+                {
+                    mov_op(inst, &memory->regs[inst->rm], &memory->buffer[i+2]);
+                }
+                else if(inst->op == ADD)
+                {
+                    add_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
+                }
+                else if(inst->op == SUB)
+                {
+                    sub_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
+                }  
+                else if(inst->op == CMP)
+                {
+                    cmp_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
+                }
+    
+                i = i+2; // w is set so two bytes of data
+            }
+        }
     }
 
     else if (inst->mod == MEM_NO_DISP)
     {
         if(!inst->w) fprintf(stdout, "byte ");
         else if(inst->w) fprintf(stdout, "word ");
-        rm_check(inst, memory->buffer, i + 1);
+        rm_check(inst, memory->buffer, i+1);
+        u16 address = rm_mem_calc(inst, memory, i);
+
+        fprintf(stdout, "[");
+        rm_print(inst, memory->buffer, i + 1);
         fprintf(stdout, "]");
+        fprintf(stdout, comma);
+
+        if(inst->directaddress)
+        {
+            if(inst->w)
+            {
+                memory->instruction_pointer = i+6;
+                u16 data = *((u16*)&memory->buffer[i+4]);
+                fprintf(stdout, "%u", data);
+            }
+            else if (!inst->w)
+            {
+                memory->instruction_pointer = i+5;
+                u8 data = memory->buffer[i+4];
+                fprintf(stdout, "%u", data);
+            }
+
+            if(inst->op == MOV)
+            {
+                mov_op(inst, &memory->mem[address], &memory->buffer[i+4]);
+            }
+        }
+
+        else if (!inst->w)
+        {
+            memory->instruction_pointer = i+3;
+            u8 data = memory->buffer[i + 2];
+            fprintf(stdout, "%u", data);
+    
+            if(inst->op == MOV)
+            {
+                mov_op(inst, &memory->mem[address], &memory->buffer[i+2]);
+            }
+
+            ++i; // w is not set so one byte of data
+        }
+        else if (inst->w)
+        {
+            if(inst->s)
+            {
+                memory->instruction_pointer = i+3;
+    
+                u8 data = memory->buffer[i + 2];
+                s16 se_data = (s16)data;
+                fprintf(stdout, "%d", se_data);
+    
+                ++i; // w is not set so one byte of data
+            }
+            else
+            {
+                memory->instruction_pointer = i+4;
+    
+                u16 data;
+                // TODO: If the casting method is working as expected then
+                // it would be good to standardize all these memcpys to just
+                // do that instead
+                memcpy(&data, memory->buffer + (i + 2), sizeof(data));
+                fprintf(stdout, "%u", data);
+    
+                if(inst->op == MOV)
+                {
+                    mov_op(inst, &memory->mem[address], &memory->buffer[i+2]);
+                }
+    
+                i = i+2; // w is set so two bytes of data
+            }
+        }
     }
 
     else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
     {
         if(!inst->w) fprintf(stdout, "byte ");
         else if(inst->w) fprintf(stdout, "word ");
-        rm_check(inst, memory->buffer, i + 1);
-        rm_disp(inst, memory->buffer, i + 2);
+        rm_check(inst, memory->buffer, i+1);
+        rm_print(inst, memory->buffer, i+1);
+        rm_disp(inst, memory->buffer, i+2);
+        u16 address = rm_mem_calc(inst, memory, i);
         i++; // one byte disp plus at least one byte of disp
         if (inst->mod == MEM_WORD_DISP) ++i; // two byte disp
-    }
 
-    fprintf(stdout, comma);
+        fprintf(stdout, comma);
 
-    if (!inst->w)
-    {
-        memory->instruction_pointer = i+3;
-        u8 data = memory->buffer[i + 2];
-        fprintf(stdout, "%u", data);
-
-        if(inst->op == ADD)
-        {
-            add_op(inst, memory, &memory->regs[inst->rm], &data);
-        }
-        else if(inst->op == SUB)
-        {
-            sub_op(inst, memory, &memory->regs[inst->rm], &data);
-        }
-        else if(inst->op == CMP)
-        {
-            cmp_op(inst, memory, &memory->regs[inst->rm], &data);
-        }
-
-        ++i; // w is not set so one byte of data
-    }
-    else if (inst->w)
-    {
-        if(inst->s)
+        if (!inst->w)
         {
             memory->instruction_pointer = i+3;
-
             u8 data = memory->buffer[i + 2];
-            s16 se_data = (s16)data;
-            fprintf(stdout, "%d", se_data);
-
-            if(inst->op == ADD)
+            fprintf(stdout, "%u", data);
+    
+            if(inst->op == MOV)
             {
-                add_op(inst, memory, &memory->regs[inst->rm], &data);
-                //TODO: Deal with sign extension 
-            }
-            else if(inst->op == SUB)
-            {
-                sub_op(inst, memory, &memory->regs[inst->rm], &data);
-                // TODO: Deal with sign extension
+                mov_op(inst, &memory->mem[address], &memory->buffer[i+2]);
             }
 
             ++i; // w is not set so one byte of data
         }
-        else
+        else if (inst->w)
         {
-            memory->instruction_pointer = i+4;
-
-            u16 data;
-            memcpy(&data, memory->buffer + (i + 2), sizeof(data));
-            fprintf(stdout, "%u", data);
-
-            if(inst->op == ADD)
+            if(inst->s)
             {
-                add_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
+                memory->instruction_pointer = i+3;
+    
+                u8 data = memory->buffer[i + 2];
+                s16 se_data = (s16)data;
+                fprintf(stdout, "%d", se_data);
+    
+                ++i; // w is not set so one byte of data
             }
-            else if(inst->op == SUB)
+            else
             {
-                sub_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
-            }  
-            else if(inst->op == CMP)
-            {
-                cmp_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
+                memory->instruction_pointer = i+4;
+    
+                u16 data;
+                memcpy(&data, memory->buffer + (i + 2), sizeof(data));
+                fprintf(stdout, "%u", data);
+    
+                if(inst->op == MOV)
+                {
+                    mov_op(inst, &memory->mem[address], &memory->buffer[i+2]);
+                }
+    
+                i = i+2; // w is set so two bytes of data
             }
-
-            i = i+2; // w is set so two bytes of data
         }
     }
 
@@ -802,7 +1004,10 @@ int main(int arg_count, char **args)
     int k = 0;
     for(int i = 0; i < 24; i = i + 2)
     {
-        fprintf(stdout, "%hS: 0x%04x\n", reg_names[k], *((u16*)&memory.regs[i]));
+        if(*((u16*)&memory.regs[i]) != 0)
+        {
+            fprintf(stdout, "%hS: 0x%04x\n", reg_names[k], *((u16*)&memory.regs[i]));
+        }
         ++k;
     }
 }
