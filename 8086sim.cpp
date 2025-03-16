@@ -409,11 +409,13 @@ static int ia(Instruction *inst, Memory *memory, u8 *buffer, int index)
 static void decode_and_execute(size_t byte_count, Memory *memory)
 {
     fprintf(stdout, opening);
+    memory->instruction_pointer = 0;
 
-    for(int i = 0; i < byte_count; ++i)
+    while(memory->instruction_pointer < byte_count)
     {
         Instruction inst = {};
         u8 op;
+        int i = memory->instruction_pointer;
 
         op = memory->buffer[i] & first_four_mask;
         if((op ^ mov_ir_bits) == 0) 
@@ -488,8 +490,16 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             }
             if((jmp_op ^ jne_bits) == 0)
             {
-                    fprintf(stdout, "jne ");
-                    inst.op = JNE;
+                memory->instruction_pointer = memory->instruction_pointer + 2;
+                fprintf(stdout, "jne ");
+                inst.op = JNE;
+                if(!memory->flags[ZF])
+                {
+                    s8 offset = memory->buffer[i+1];
+                    memory->instruction_pointer = memory->instruction_pointer + offset;
+                }
+
+                fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             }
             if((jmp_op ^ jnl_bits) == 0)
             {
