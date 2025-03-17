@@ -202,44 +202,33 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             fprintf(stdout, comma);
             reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
-            if(inst->op == MOV) 
-            {
-                mov_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
-            }
-            else if(inst->op == ADD) 
-            {
-                add_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
-            }
-            else if(inst->op == SUB) 
-            {
-                sub_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
-            }
-            else if(inst->op == CMP)
-            {
-                cmp_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
-            }
         }
         else
         {
             reg_check(inst, 3, rm_mask, memory->buffer, i+1, true);
             fprintf(stdout, comma);
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
-            if(inst->op == MOV) 
-            {
-                mov_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
-            }
-            else if(inst->op == ADD) 
-            {
-                add_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
-            }
-            else if(inst->op == SUB) 
-            {
-                sub_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
-            }
-            else if(inst->op == CMP)
-            {
-                cmp_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
-            }
+        }
+
+        if(inst->op == MOV) 
+        {
+           if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+           else mov_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+        }
+        else if(inst->op == ADD) 
+        {
+            if(inst->d) add_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            else add_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+        }
+        else if(inst->op == SUB) 
+        {
+            if(inst->d) sub_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            else sub_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+        }
+        else if(inst->op == CMP)
+        {
+            if(inst->d) cmp_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
+            else cmp_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
         }
     }
 
@@ -274,6 +263,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             memory->instruction_pointer = i+2;
             reg_check(inst, 0, reg_mask, memory->buffer, i+1, false);
             fprintf(stdout, comma);
+            fprintf(stdout, "[");
             rm_print(inst, memory->buffer, i + 1);
             fprintf(stdout, "]");
 
@@ -281,6 +271,7 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         else
         {
             memory->instruction_pointer = i+2;
+            fprintf(stdout, "[");
             rm_print(inst, memory->buffer, i+1);
             fprintf(stdout, "]");
             fprintf(stdout, comma);
@@ -291,6 +282,21 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         {
             if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->mem[address]);
             else mov_op(inst, &memory->mem[address], &memory->regs[inst->reg]);
+        }
+        else if(inst->op == ADD)
+        {
+            if(inst->d) add_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
+            else add_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
+        }
+        else if(inst->op == SUB)
+        {
+            if(inst->d) sub_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
+            else sub_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
+        }
+        else if(inst->op == SUB)
+        {
+            if(inst->d) cmp_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
+            else cmp_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
         }
     }
 
@@ -330,6 +336,21 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         {
             if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->mem[address]);
             else mov_op(inst, &memory->mem[address], &memory->regs[inst->reg]);
+        }
+        else if(inst->op == ADD)
+        {
+            if(inst->d) add_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
+            else add_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
+        }
+        if(inst->op == SUB)
+        {
+            if(inst->d) sub_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
+            else sub_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
+        }
+        if(inst->op == CMP)
+        {
+            if(inst->d) cmp_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
+            else cmp_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
         }
     }
 
@@ -419,18 +440,6 @@ static int irm(Instruction *inst, Memory *memory, int index)
                 if(inst->op == MOV)
                 {
                     mov_op(inst, &memory->regs[inst->rm], &memory->buffer[i+2]);
-                }
-                else if(inst->op == ADD)
-                {
-                    add_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
-                }
-                else if(inst->op == SUB)
-                {
-                    sub_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
-                }  
-                else if(inst->op == CMP)
-                {
-                    cmp_op(inst, memory, &memory->regs[inst->rm], (u8*)(&data));
                 }
     
                 i = i+2; // w is set so two bytes of data
