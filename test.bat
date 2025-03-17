@@ -1,3 +1,3 @@
 pushd ..\build
-8086sim listing_0054_draw_rectangle > ignore.txt
+8086sim listing_0055_challenge_rectangle > log2.txt
 popd
