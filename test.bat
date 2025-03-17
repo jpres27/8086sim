@@ -1,3 +1,3 @@
 pushd ..\build
-8086sim listing_0053_add_loop_challenge
+8086sim listing_0054_draw_rectangle > ignore.txt
 popd

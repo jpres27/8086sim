@@ -76,10 +76,12 @@ static void cmp_op(Instruction *inst, Memory *memory, u8 *operand_1, u8 *operand
     if(inst->w) 
     {
         *((u16*)(&memory->cmp_buffer[0])) = *((u16*)operand_1) - *((u16*)operand_2);
+        fprintf(stdout, "\nCMP BUFFER CONTENTS: %u\n", TwoByteAccess(memory->cmp_buffer[0]));
     }
     else 
     {
         memory->cmp_buffer[0] = *operand_1 - *operand_2;
+        fprintf(stdout, "\nCMP BUFFER CONTENTS: %u\n", memory->cmp_buffer[0]);
     }
 
     flag_check(inst, memory, &memory->cmp_buffer[0]);
@@ -412,19 +414,21 @@ static int irm(Instruction *inst, Memory *memory, int index)
             {
                 memory->instruction_pointer = i+3;
     
-                u8 data = memory->buffer[i + 2];
+                u8 data = memory->buffer[i+2];
                 s16 se_data = (s16)data;
                 fprintf(stdout, "%d", se_data);
     
                 if(inst->op == ADD)
                 {
-                    add_op(inst, memory, &memory->regs[inst->rm], &data);
-                    //TODO: Deal with sign extension 
+                    add_op(inst, memory, &memory->regs[inst->rm], (u8*)(&se_data));
                 }
                 else if(inst->op == SUB)
                 {
-                    sub_op(inst, memory, &memory->regs[inst->rm], &data);
-                    // TODO: Deal with sign extension
+                    sub_op(inst, memory, &memory->regs[inst->rm], (u8*)(&se_data));
+                }
+                else if(inst->op == CMP)
+                {
+                    cmp_op(inst, memory, &memory->regs[inst->rm], (u8*)(&se_data));
                 }
     
                 ++i; // w is not set so one byte of data
@@ -624,6 +628,8 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
 
     while(memory->instruction_pointer < byte_count)
     {
+        fprintf(stdout, "\nCX REGISTER CONTENTS: %u\n", TwoByteAccess(memory->regs[CX]));
+
         Instruction inst = {};
         u8 op;
         int i = memory->instruction_pointer;
@@ -993,6 +999,10 @@ int main(int arg_count, char **args)
         size_t bytes_read = load_memory_from_file(filename, &memory);
         decode_and_execute(bytes_read, &memory);
     }
+
+    FILE *f = fopen("img.data", "wb");
+    fwrite(memory.mem, sizeof(u8), sizeof(memory.mem), f);
+    fclose(f);
 
     char* reg_names[] = 
     {

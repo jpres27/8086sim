@@ -14,6 +14,7 @@ typedef s32 b32;
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 #define TwoByteAccess(a) *((u16*)&a)
+#define OneByteAccess(a) *((u8*)&a)
 
 struct Memory 
 {
