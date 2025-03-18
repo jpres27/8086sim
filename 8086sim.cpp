@@ -183,6 +183,12 @@ static u16 rm_mem_calc(Instruction *inst, Memory *memory, int i)
     return(address);
 }
 
+static void print_clocks(u32 clocks, Memory *memory)
+{
+    memory->clocks_total += clocks;
+    fprintf(stdout, "; Clocks: %u ", clocks);
+}
+
 // TODO: Once we stop needing to print instructions, a lot of this function can be
 // greatly simplified, as much of what is here is solely to print out the parts
 // of the instruction in the correct order
@@ -214,11 +220,15 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         {
            if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->regs[inst->rm]);
            else mov_op(inst, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+           inst->clocks += 2;
+           print_clocks(inst->clocks, memory); 
         }
         else if(inst->op == ADD) 
         {
             if(inst->d) add_op(inst, memory, &memory->regs[inst->reg], &memory->regs[inst->rm]);
             else add_op(inst, memory, &memory->regs[inst->rm], &memory->regs[inst->reg]);
+            inst->clocks += 3;
+            print_clocks(inst->clocks, memory); 
         }
         else if(inst->op == SUB) 
         {
@@ -245,16 +255,18 @@ static int rmr(Instruction *inst, Memory *memory, int index)
             if (!inst->w)
             {
                 memory->instruction_pointer = i+3;
-                u8 data = memory->buffer[i+2];
-                fprintf(stdout, "[%u]", data);
+                /*u8 data = memory->buffer[i+2];
+                fprintf(stdout, "[%u]", data);*/
+                rm_print(inst, memory->buffer, i+1);
                 ++i; // w is not set so a byte of data
             }
             else if (inst->w)
             {
                 memory->instruction_pointer = i+4;
-                u16 data;
+                /*u16 data;
                 memcpy(&data, memory->buffer + (i+2), sizeof(data));
-                fprintf(stdout, "[%u]", data);
+                fprintf(stdout, "[%u]", data);*/
+                rm_print(inst, memory->buffer, i+1);
                 i = i+2;; // w is set so a word of data
             }
         }
@@ -282,11 +294,17 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         {
             if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->mem[address]);
             else mov_op(inst, &memory->mem[address], &memory->regs[inst->reg]);
+            if(inst->d) inst->clocks += 8;
+            else if(!inst->d) inst->clocks += 9;
+            print_clocks(inst->clocks, memory);
         }
         else if(inst->op == ADD)
         {
             if(inst->d) add_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
             else add_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
+            if(inst->d) inst->clocks += 9;
+            else if(!inst->d) inst->clocks += 16;
+            print_clocks(inst->clocks, memory);
         }
         else if(inst->op == SUB)
         {
@@ -344,11 +362,17 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         {
             if(inst->d) mov_op(inst, &memory->regs[inst->reg], &memory->mem[address]);
             else mov_op(inst, &memory->mem[address], &memory->regs[inst->reg]);
+            if(inst->d) inst->clocks += 8;
+            else if(!inst->d) inst->clocks += 9;
+            print_clocks(inst->clocks, memory);
         }
         else if(inst->op == ADD)
         {
             if(inst->d) add_op(inst, memory, &memory->regs[inst->reg], &memory->mem[address]);
             else add_op(inst, memory, &memory->mem[address], &memory->regs[inst->reg]);
+            if(inst->d) inst->clocks += 9;
+            else if(!inst->d) inst->clocks += 16;
+            print_clocks(inst->clocks, memory);
         }
         if(inst->op == SUB)
         {
@@ -397,10 +421,14 @@ static int irm(Instruction *inst, Memory *memory, int index)
             if(inst->op == MOV)
             {
                 mov_op(inst, &memory->regs[inst->rm], &data);
+                inst->clocks += 4;
+                print_clocks(inst->clocks, memory);
             }
             else if(inst->op == ADD)
             {
                 add_op(inst, memory, &memory->regs[inst->rm], &data);
+                inst->clocks += 4;
+                print_clocks(inst->clocks, memory);
             }
             else if(inst->op == SUB)
             {
@@ -426,6 +454,8 @@ static int irm(Instruction *inst, Memory *memory, int index)
                 if(inst->op == ADD)
                 {
                     add_op(inst, memory, &memory->regs[inst->rm], (u8*)(&se_data));
+                    inst->clocks += 4;
+                    print_clocks(inst->clocks, memory);
                 }
                 else if(inst->op == SUB)
                 {
@@ -449,10 +479,14 @@ static int irm(Instruction *inst, Memory *memory, int index)
                 if(inst->op == MOV)
                 {
                     mov_op(inst, &memory->regs[inst->rm], &memory->buffer[i+2]);
+                    inst->clocks += 4;
+                    print_clocks(inst->clocks, memory);
                 }
                 else if(inst->op == ADD)
                 {
                     add_op(inst, memory, &memory->regs[inst->rm], &memory->buffer[i+2]);
+                    inst->clocks += 4;
+                    print_clocks(inst->clocks, memory);
                 }
     
                 i = i+2; // w is set so two bytes of data
@@ -490,6 +524,8 @@ static int irm(Instruction *inst, Memory *memory, int index)
             if(inst->op == MOV)
             {
                 mov_op(inst, &memory->mem[address], &memory->buffer[i+4]);
+                inst->clocks += 10;
+                print_clocks(inst->clocks, memory);
             }
         }
 
@@ -561,6 +597,8 @@ static int irm(Instruction *inst, Memory *memory, int index)
             if(inst->op == MOV)
             {
                 mov_op(inst, &memory->mem[address], &memory->buffer[i+2]);
+                inst->clocks += 10;
+                print_clocks(inst->clocks, memory);
             }
 
             ++i; // w is not set so one byte of data
@@ -588,6 +626,8 @@ static int irm(Instruction *inst, Memory *memory, int index)
                 if(inst->op == MOV)
                 {
                     mov_op(inst, &memory->mem[address], &memory->buffer[i+2]);
+                    inst->clocks += 10;
+                    print_clocks(inst->clocks, memory);
                 }
     
                 i = i+2; // w is set so two bytes of data
@@ -649,6 +689,8 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             reg_check(&inst, 3, last_three_mask, memory->buffer, i, false);
             fprintf(stdout, comma);
             mov_op(&inst, &memory->regs[inst.reg], &memory->buffer[i+1]);
+            inst.clocks += 4;
+            print_clocks(inst.clocks, memory);
             if(!inst.w)
             {
                 memory->instruction_pointer = i+2;

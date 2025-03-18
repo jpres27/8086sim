@@ -189,4 +189,5 @@ struct Instruction
     Reg reg;
     u32 rm;
     b32 directaddress;
+    u32 clocks;
 };

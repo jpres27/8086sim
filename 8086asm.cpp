@@ -235,43 +235,116 @@ static void rm_print(Instruction *inst, u8 *buffer, int i)
     if((rm ^ 0x0) == 0) 
     {
         fprintf(stdout, "bx + si"); 
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->clocks += 7;
+        }
+        else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+        {
+            inst->clocks += 11;
+        }
     }
     if((rm ^ 0x1) == 0) 
     {
         fprintf(stdout, "bx + di"); 
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->clocks += 8;
+        }
+        else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+        {
+            inst->clocks += 12;
+        }
     }
     if((rm ^ 0x2) == 0) 
     {
         fprintf(stdout, "bp + si"); 
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->clocks += 8;
+        }
+        else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+        {
+            inst->clocks += 12;
+        }
     }
     if((rm ^ 0x3) == 0) 
     {
         fprintf(stdout, "bp + di"); 
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->clocks += 7;
+        }
+        else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+        {
+            inst->clocks += 11;
+        }
     }
     if((rm ^ 0x4) == 0) 
     {
         fprintf(stdout, "si"); 
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->clocks += 5;
+        }
+        else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+        {
+            inst->clocks += 9;
+        }
     }
     if((rm ^ 0x5) == 0) 
     {
         fprintf(stdout, "di");  
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->clocks += 5;
+        }
+        else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+        {
+            inst->clocks += 9;
+        }
     }
     if((rm ^ 0x6) == 0) 
     {
         inst->rm = 6;
         if(inst->mod == MEM_NO_DISP) 
         {
-            u16 disp = *((u16*)&buffer[i+1]);
-            fprintf(stdout, "%u", disp);
+            if(inst->w)
+            {
+                u16 disp = *((u16*)&buffer[i+1]);
+                fprintf(stdout, "[%u]", disp);
+            }
+            else
+            {
+                u8 data = buffer[i+1];
+                fprintf(stdout, "[%u]", data);
+            }
+            inst->clocks += 6;
         }
         else
         {
             fprintf(stdout, "[bp");
+            if(inst->mod == MEM_NO_DISP) 
+            {
+                inst->clocks += 5;
+            }
+            else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+            {
+                inst->clocks += 9;
+            }
         }
     }
     if((rm ^ 0x7) == 0) 
     {
         fprintf(stdout, "[bx"); 
+        if(inst->mod == MEM_NO_DISP) 
+        {
+            inst->clocks += 5;
+        }
+        else if (inst->mod == MEM_BYTE_DISP || inst->mod == MEM_WORD_DISP)
+        {
+            inst->clocks += 9;
+        }
     }
 }
 
