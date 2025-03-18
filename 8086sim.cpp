@@ -69,7 +69,6 @@ static void sub_op(Instruction *inst, Memory *memory, u8 *operand_1, u8 *operand
     }
 
     flag_check(inst, memory, operand_1);
-    fprintf(stdout, " DX REGISTER CONTENTS %u ", TwoByteAccess(memory->regs[DX]));
 }
 
 static void cmp_op(Instruction *inst, Memory *memory, u8 *operand_1, u8 *operand_2)
@@ -77,12 +76,10 @@ static void cmp_op(Instruction *inst, Memory *memory, u8 *operand_1, u8 *operand
     if(inst->w) 
     {
         *((u16*)(&memory->cmp_buffer[0])) = *((u16*)operand_1) - *((u16*)operand_2);
-        fprintf(stdout, " CMP BUFFER CONTENTS: %u ", TwoByteAccess(memory->cmp_buffer[0]));
     }
     else 
     {
         memory->cmp_buffer[0] = *operand_1 - *operand_2;
-        fprintf(stdout, " CMP BUFFER CONTENTS: %u ", memory->cmp_buffer[0]);
     }
 
     flag_check(inst, memory, &memory->cmp_buffer[0]);
@@ -365,7 +362,6 @@ static int rmr(Instruction *inst, Memory *memory, int index)
         }
     }
 
-    fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
     fprintf(stdout, end_of_inst);
     ++i; // two byte instruction
     return(i);
@@ -599,7 +595,6 @@ static int irm(Instruction *inst, Memory *memory, int index)
         }
     }
 
-    fprintf(stdout, "     /// IP: 0x%04x ///     ", memory->instruction_pointer);
     fprintf(stdout, end_of_inst);
     ++i;
     return(i);
@@ -628,7 +623,6 @@ static int ia(Instruction *inst, Memory *memory, u8 *buffer, int index)
         ++i; // three byte instruction since w=1
     }
 
-    fprintf(stdout, "     /// IP: 0x%04x ///     ", memory->instruction_pointer);
     fprintf(stdout, end_of_inst);
     ++i;
     return(i);
@@ -636,8 +630,7 @@ static int ia(Instruction *inst, Memory *memory, u8 *buffer, int index)
 
 static void decode_and_execute(size_t byte_count, Memory *memory)
 {
-    //fprintf(stdout, opening);
-    fprintf(stdout, "ok lets go\n");
+    fprintf(stdout, opening);
     memory->instruction_pointer = 0;
 
     while(memory->instruction_pointer < byte_count)
@@ -645,7 +638,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
         Instruction inst = {};
         u8 op;
         int i = memory->instruction_pointer;
-        fprintf(stdout, "BX: %u  ", TwoByteAccess(memory->regs[BX]));
 
         op = memory->buffer[i] & first_four_mask;
         if((op ^ mov_ir_bits) == 0) 
@@ -669,7 +661,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
                 ++i; // three byte instruction since w=1
             }
             ++i; // it was at least a two byte instruction
-            fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             continue;
         }
@@ -728,8 +719,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
                     s8 offset = memory->buffer[i+1];
                     memory->instruction_pointer = memory->instruction_pointer + offset;
                 }
-
-                fprintf(stdout, "     /// IP: 0x%04x   ///     ", memory->instruction_pointer);
             }
             if((jmp_op ^ jnl_bits) == 0)
             {
@@ -791,8 +780,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
                     s8 offset = (s8)memory->buffer[i+1];
                     memory->instruction_pointer = memory->instruction_pointer + offset;
                 }
-                fprintf(stdout, "  CX REGISTER CONTENTS: %u  ", TwoByteAccess(memory->regs[CX]));
-                fprintf(stdout, "     /// IP: 0x%04x ///     ", memory->instruction_pointer);
             }
             if((loop_op ^ loopz_bits) == 0)
             {
@@ -930,7 +917,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
                 ++i; // three byte instruction since w=1
             }
 
-            fprintf(stdout, "     /// IP: 0x%04x ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;
@@ -958,7 +944,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
             }
             fprintf(stdout, ", ax");
 
-            fprintf(stdout, "     /// IP: 0x%04x ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;
@@ -983,7 +968,6 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
                 mov_op(&inst, &memory->regs[inst.reg], &memory->regs[inst.rm]);
             }
 
-            fprintf(stdout, "     /// IP: 0x%04x ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;
@@ -1005,12 +989,10 @@ static void decode_and_execute(size_t byte_count, Memory *memory)
                 mov_op(&inst, &memory->regs[inst.rm], &memory->regs[inst.reg]);
             }
 
-            fprintf(stdout, "     /// IP: 0x%04x ///     ", memory->instruction_pointer);
             fprintf(stdout, end_of_inst);
             ++i;
             continue;
         }
-        fprintf(stdout, "CX: 0x%02x  DX: 0x%02x  ", TwoByteAccess(memory->regs[CX]), TwoByteAccess(memory->regs[DX]));
     }
 }
 
@@ -1025,9 +1007,9 @@ int main(int arg_count, char **args)
         decode_and_execute(bytes_read, &memory);
     }
 
-    FILE *f = fopen("img.data", "wb");
+    /*FILE *f = fopen("img.data", "wb");
     fwrite(memory.mem, sizeof(u8), sizeof(memory.mem), f);
-    fclose(f);
+    fclose(f);*/
 
     char* reg_names[] = 
     {
